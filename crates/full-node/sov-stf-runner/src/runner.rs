@@ -165,12 +165,7 @@ where
         let listen_address_http =
             SocketAddr::new(axum_config.bind_host.parse()?, axum_config.bind_port);
 
-        let next_item_numbers = tokio::task::spawn_blocking({
-            let ledger_db = ledger_db.clone();
-            move || ledger_db.get_next_items_numbers()
-        })
-        .await
-        .expect("spawn_blocking failed")?;
+        let next_item_numbers = ledger_db.get_next_items_numbers()?;
         let last_slot_processed_before_shutdown = next_item_numbers.slot_number.saturating_sub(1);
 
         let da_height_processed =
@@ -746,28 +741,15 @@ pub async fn query_state_update_info<S>(
         .await?
         .map(|x| x + 1)
         .unwrap_or_default();
-    let next_tx_number = tokio::task::spawn_blocking({
-        let ledger_db = ledger_db.clone();
-        move || ledger_db.get_next_items_numbers()
-    })
-    .await
-    .expect("spawn_blocking failed")?
-    .tx_number;
+    let next_tx_number = ledger_db.get_next_items_numbers()?.tx_number;
     let latest_finalized_slot_number = ledger_db
         .get_latest_finalized_slot_number()
         .await?
         .min(slot_number);
 
-    let ledger_reader = tokio::task::spawn_blocking({
-        let ledger_db = ledger_db.clone();
-        move || ledger_db.clone_reader()
-    })
-    .await
-    .expect("spawn_blocking failed");
-
     Ok(StateUpdateInfo {
         storage,
-        ledger_reader,
+        ledger_reader: ledger_db.clone_reader(),
         next_event_number,
         next_tx_number,
         slot_number,
